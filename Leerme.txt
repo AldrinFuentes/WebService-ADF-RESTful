@@ -1,0 +1,133 @@
+Proyecto: Web Service - ADF - RESTFul
+
+Descripción: RESTFul webservice with ADF BC with the following details:
+	Type: HTTP(POST) 
+	Body: application/x-www-form-urlencoded
+	Key: message
+	Value: String
+
+0. Install Oracle Database 11G XE, enable HR user and create the following package:
+
+create or replace PACKAGE      Test_PKG AS 
+
+    FUNCTION Test_Comunicacion (message IN VARCHAR2) RETURN VARCHAR2;
+
+END Test_PKG;
+/
+
+create or replace PACKAGE BODY      Test_PKG AS
+
+  FUNCTION Test_Comunicacion (message IN VARCHAR2) RETURN VARCHAR2 AS
+  BEGIN
+    RETURN 'La base de datos respondió:' || message;
+  END Test_Comunicacion;
+
+END Test_PKG;
+/
+
+1. New/Application/ADF Fusion Application 
+	Name: AppWebService-ADF-Servlet-RESTFul
+2. Model Project 
+	Name:RESTModel
+	Package: restmodel
+3. View Controller Project 
+	Name: RESTService
+	Package: restservice)
+4. Right click on Model Project and New/Application Module 
+	Create connection: hr/hr/localhost/xe/1521
+	Name: RESTAppModule
+	In Java options check: "Generate Application Module Class"
+5. Add the following method to Application Module:
+
+    import java.sql.Types;
+
+    public String testComunicacion(String message){
+        String llamada = "BEGIN ?:=HR.Test_PKG.Test_Comunicacion(?); END;";
+        String vMessage = message;
+        try {
+            CallableStatement cs = getDBTransaction().createCallableStatement(llamada,0);
+            cs.registerOutParameter(1,Types.VARCHAR);
+            cs.setString(2,vMessage);
+            cs.execute();
+            String resultado = cs.getString(1);
+            return resultado;
+        }
+            catch (Exception e) {
+            return null;
+        }        
+    }   
+
+6. Double click on Application Module, select Java Options and add testComunicacion method to the Client Interface.
+7. Right click on RESTModel Project and Rebuild.
+8. Right click on RESTService Project and New/Java/Class 
+	Name: RESTService
+9. Add the following method to RESTService class:
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+
+import oracle.adf.share.ADFContext;
+
+import oracle.jbo.client.Configuration;
+
+import restmodel.common.RESTAppModule;
+
+
+     public String Test_Comunicacion(String message){
+        
+        String        qualifiedAMDefName = "restmodel.RESTAppModule";
+        String        configName = "RESTAppModuleLocal";
+        String        resultado = null;
+        RESTAppModule am = null;
+        ADFContext ctx = null; 
+        
+       try{
+           ctx = ADFContext.initADFContext(null, null, null, null);
+           am = (RESTAppModule) Configuration.createRootApplicationModule(qualifiedAMDefName, configName);
+           resultado = am.testComunicacion(message);
+
+       }catch(Exception ex){
+
+           StringWriter sw = new StringWriter();
+           PrintWriter pw = new PrintWriter(sw);
+           ex.printStackTrace(pw);
+           resultado = sw.toString(); 
+
+       }finally{
+           if (am != null) {
+               Configuration.releaseRootApplicationModule(am, false);
+            }
+           
+           ADFContext.resetADFContext(ctx);
+       }
+       
+       return resultado;
+    }
+
+
+10. Right click on RESTService class and Create RESTful Service 
+	- Root Path: restservice
+	- Configure HTTP Methods:
+		Name: (Default)
+		Type: POST
+		Consumes: application/x-www-form-urlencoded
+		Produces: application/x-www-form-urlencoded)
+		Path: (Name)
+
+12. Rigth click on RESTService Project: Properties/Java EE Application
+	- Java EE Web Context Root: WebServiceADFRESTful
+	
+12. Rigth click on RESTService Project: Properties/Deployment/Edit
+	- General/War File: ...\WebServiceADFRESTful.war
+	- Profile Dependencies: expand RESTModel.jsp and check the options.
+	- WEB-INF/lib/Contributors: BC4J Runtime (ckecked)
+
+11. And finally, right lick on RESTService and Test service.
+
+12. Before deploy:
+	java:comp/env/jdbc/hr to jdbc/hrDS
